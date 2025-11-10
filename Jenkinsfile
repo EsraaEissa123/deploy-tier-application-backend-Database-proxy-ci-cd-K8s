@@ -2,7 +2,6 @@ pipeline {
     agent {
         kubernetes {
             label 'build-deploy-agent'
-            container 'jnlp' 
         }
     }
 
