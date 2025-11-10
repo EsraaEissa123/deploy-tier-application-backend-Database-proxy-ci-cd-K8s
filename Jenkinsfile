@@ -1,6 +1,9 @@
 pipeline {
     agent {
-        label 'build-deploy-agent'
+        kubernetes {
+            label 'build-deploy-agent'
+            container 'jnlp' 
+        }
     }
 
     environment {
