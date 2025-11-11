@@ -1,10 +1,14 @@
-pipeline {
-    agent any
+ppipeline {
+    agent {
+        kubernetes {
+            label 'build-deploy-agent'
+        }
+    }
 
     environment {
         IMAGE_TAG = "${env.BUILD_NUMBER ?: 'local-'+env.BUILD_ID}"
-        DOCKER_REGISTRY = "esraaeissa81"   // اسم اليوزر في DockerHub
-        K8S_NAMESPACE = "dev"
+        DOCKER_REGISTRY = 'esraaeissa81'   // اسم اليوزر في DockerHub
+        K8S_NAMESPACE = 'dev'
         DOCKER_CREDENTIALS_ID = 'docker-hub-esraa'
     }
 
@@ -18,11 +22,11 @@ pipeline {
 
         stage('Build Images') {
             steps {
-                echo "Building backend image..."
-                sh "docker build -t ${DOCKER_REGISTRY}/deploy-tier-app-backend:${IMAGE_TAG} -f backend/Dockerfile backend/"
+                echo 'Building backend image...'
+                sh "docker build -t ${DOCKER_REGISTRY}/esraaeissa81/backend:${IMAGE_TAG} -f backend/Dockerfile backend/"
 
-                echo "Building proxy image..."
-                sh "docker build -t ${DOCKER_REGISTRY}/deploy-tier-app-proxy:${IMAGE_TAG} -f proxy/Dockerfile proxy/"
+                echo 'Building proxy image...'
+                sh "docker build -t ${DOCKER_REGISTRY}/esraaeissa81/proxy:${IMAGE_TAG} -f proxy/Dockerfile proxy/"
             }
         }
 
@@ -30,18 +34,22 @@ pipeline {
             steps {
                 withCredentials([usernamePassword(credentialsId: DOCKER_CREDENTIALS_ID, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                     sh "echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin"
-                    sh "docker push ${DOCKER_REGISTRY}/deploy-tier-app-backend:${IMAGE_TAG}"
-                    sh "docker push ${DOCKER_REGISTRY}/deploy-tier-app-proxy:${IMAGE_TAG}"
+                    sh "docker push ${DOCKER_REGISTRY}/esraaeissa81/backend:${IMAGE_TAG}"
+                    sh "docker push ${DOCKER_REGISTRY}/esraaeissa81/proxy:${IMAGE_TAG}"
                 }
             }
         }
 
         stage('Prepare Manifests') {
             steps {
-                // ننسخ ملفات k8s ونعمل استبدال للـ placeholder
-                sh "mkdir -p k8s-generated"
-                sh "for f in k8s/*.yaml; do sed 's|LATEST_IMAGE_TAG|${IMAGE_TAG}|g' \"$f\" > \"k8s-generated/$(basename $f)\"; done"
-                sh "ls -la k8s-generated"
+                echo 'Generating updated Kubernetes manifests...'
+                sh '''
+        mkdir -p k8s-generated
+        for f in k8s/*.yaml; do
+          sed "s|LATEST_IMAGE_TAG|'"${IMAGE_TAG}"'|g" "$f" > "k8s-generated/$(basename $f)"
+        done
+        ls -la k8s-generated
+        '''
             }
         }
 
@@ -75,7 +83,7 @@ pipeline {
             echo "Pipeline succeeded. Deployed ${DOCKER_REGISTRY} images with tag ${IMAGE_TAG} to ${K8S_NAMESPACE}."
         }
         failure {
-            echo "Pipeline failed."
+            echo 'Pipeline failed.'
         }
     }
 }
