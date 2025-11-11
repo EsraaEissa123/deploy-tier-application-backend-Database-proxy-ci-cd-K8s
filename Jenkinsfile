@@ -39,7 +39,7 @@ spec:
             steps {
                 container('docker') {
                     sh 'docker version'
-                    sh 'echo "Running on Pod: $NODE_NAME"'
+                    sh "echo Running on Pod: ${NODE_NAME}"
                 }
             }
         }
@@ -74,12 +74,12 @@ spec:
         stage('Prepare Manifests') {
             steps {
                 sh '''
-        mkdir -p k8s-generated
-        for f in k8s/*.yaml; do
-          sed "s|LATEST_IMAGE_TAG|'"${IMAGE_TAG}"'|g" "$f" > "k8s-generated/$(basename $f)"
-        done
-        ls -la k8s-generated
-        '''
+mkdir -p k8s-generated
+for f in k8s/*.yaml; do
+  sed "s|LATEST_IMAGE_TAG|'"${IMAGE_TAG}"'|g" "$f" > "k8s-generated/$(basename $f)"
+done
+ls -la k8s-generated
+'''
             }
         }
 
