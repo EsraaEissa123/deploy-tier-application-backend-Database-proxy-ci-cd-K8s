@@ -37,7 +37,7 @@ spec:
     stages {
         stage('Check Agent') {
             steps {
-                container('docker') {
+                container('docker-kubectl-tools') {
                     sh 'docker version'
                     sh "echo Running on Pod: ${NODE_NAME}"
                 }
@@ -52,7 +52,7 @@ spec:
 
         stage('Build Images') {
             steps {
-                container('docker') {
+                container('docker-kubectl-tools') {
                     sh "docker build -t ${DOCKER_REGISTRY}/backend:${IMAGE_TAG} -f backend/Dockerfile backend/"
                     sh "docker build -t ${DOCKER_REGISTRY}/proxy:${IMAGE_TAG} -f proxy/Dockerfile proxy/"
                 }
