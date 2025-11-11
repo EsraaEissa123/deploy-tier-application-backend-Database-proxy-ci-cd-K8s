@@ -1,8 +1,8 @@
 pipeline {
     agent {
         kubernetes {
-            label 'build-deploy-agent'   // نفس الاسم القديم
-            yaml """
+            label 'build-deploy-agent'
+            yaml '''
 apiVersion: v1
 kind: Pod
 metadata:
@@ -22,8 +22,8 @@ spec:
     tty: true
   - name: jnlp
     image: jenkins/inbound-agent:latest
-    args: ['$(JENKINS_SECRET)', '$(JENKINS_AGENT_NAME)']
-     """
+    args: ['\$JENKINS_SECRET', '\$JENKINS_AGENT_NAME']
+'''
         }
     }
 
