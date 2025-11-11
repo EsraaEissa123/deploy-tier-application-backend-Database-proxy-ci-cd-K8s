@@ -15,9 +15,9 @@ spec:
         app: blog-proxy
     spec:
       containers:
-      - name: nginx-proxy
-        # يجب استخدام صورتك التي تم بناؤها (مثال: myrepo/nginx-proxy:latest)
-        image: esraaeissa81/proxy:LATEST_IMAGE_TAG
-        imagePullPolicy: Always
-        ports:
-        - containerPort: 443
+        - name: nginx-proxy
+          # يجب استخدام صورتك التي تم بناؤها (مثال: myrepo/nginx-proxy:latest)
+          image: esraaeissa81/proxy:LATEST_IMAGE_TAG
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 443

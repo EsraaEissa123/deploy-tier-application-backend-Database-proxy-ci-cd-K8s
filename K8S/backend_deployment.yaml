@@ -16,52 +16,56 @@ spec:
     spec:
       # POD-LEVEL SECURITY CONTEXT: Includes fields like fsGroup that apply to volumes/pod
       securityContext:
-        fsGroup: 1000 
-        
+        fsGroup: 1000
+
       # *** NEW FIX: Stop mounting the service account token to avoid the read-only file system error ***
       automountServiceAccountToken: false
-        
+
       initContainers:
-      - name: init-db-wait
-        image: busybox:1.36 
-        command: ['sh', '-c', '
-          echo "Waiting for db-service connectivity...";
-          until nc -z db-service 3306; do 
-            echo "Service db-service is unavailable - sleeping"; 
-            sleep 3; 
-          done; 
-          echo "db-service is ready!";
-        ']
-        
+        - name: init-db-wait
+          image: busybox:1.36
+          command: [
+              "sh",
+              "-c",
+              '
+              echo "Waiting for db-service connectivity...";
+              until nc -z db-service 3306; do
+              echo "Service db-service is unavailable - sleeping";
+              sleep 3;
+              done;
+              echo "db-service is ready!";
+              ',
+            ]
+
       containers:
-      - name: go-app
-        image: esraaeissa81/esraaeissa81/backend:LATEST_IMAGE_TAG
-        imagePullPolicy: Always
-        ports:
-        - containerPort: 8000
-        env:
-        - name: DB_HOST
-          value: db-service
-        - name: DB_USER
-          value: root
-        - name: DB_NAME
-          value: example
-        
-        volumeMounts:
-        - name: db-secret-volume
-          mountPath: "/run/secrets"
-          readOnly: true
-          
-        # CONTAINER-LEVEL SECURITY CONTEXT: Includes runAsUser, capabilities, etc.
-        securityContext:
-          runAsUser: 1000
-          runAsGroup: 1000
-          readOnlyRootFilesystem: false 
-          
+        - name: go-app
+          image: esraaeissa81/backend:LATEST_IMAGE_TAG
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DB_HOST
+              value: db-service
+            - name: DB_USER
+              value: root
+            - name: DB_NAME
+              value: example
+
+          volumeMounts:
+            - name: db-secret-volume
+              mountPath: "/run/secrets"
+              readOnly: true
+
+          # CONTAINER-LEVEL SECURITY CONTEXT: Includes runAsUser, capabilities, etc.
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            readOnlyRootFilesystem: false
+
       volumes:
-      - name: db-secret-volume
-        secret:
-          secretName: mysql-secret
-          items:
-          - key: password
-            path: db-password
+        - name: db-secret-volume
+          secret:
+            secretName: mysql-secret
+            items:
+              - key: password
+                path: db-password
