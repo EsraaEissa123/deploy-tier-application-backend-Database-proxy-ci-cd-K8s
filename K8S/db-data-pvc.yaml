@@ -1,12 +1,11 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: db-pvc
-  namespace: webapp
+  name: mysql-pvc
 spec:
+  storageClassName: manual
   accessModes:
-  - ReadWriteMany
-  storageClassName: standard
+    - ReadWriteOnce
   resources:
     requests:
-      storage: 5Gi
+      storage: 1Gi

@@ -1,40 +1,38 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: database-deployment
-  namespace: webapp
+  name: mysql-deployment
   labels:
-    app: database-deployment
+    app: blog-db
 spec:
+  replicas: 1
   selector:
     matchLabels:
-      app: database
-  replicas: 1
+      app: blog-db
   template:
     metadata:
       labels:
-        app: database
+        app: blog-db
     spec:
-      volumes:
-      - name: db-password
-        secret:
-          secretName: db-secret
-      - name: db-data
-        persistentVolumeClaim:
-          claimName: db-pvc
       containers:
-      - name: database
+      - name: mysql
         image: mysql:8.0
+        ports:
+        - containerPort: 3306
         env:
+          # استخدام الـ Secret لتعيين كلمة المرور
         - name: MYSQL_ROOT_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: db-secret
-              key: db-password
+              name: mysql-secret
+              key: password
         - name: MYSQL_DATABASE
-          value: "example"
-        ports:
-        - containerPort: 3306
+          value: example
+        # ربط الـ PVC بالتخزين
         volumeMounts:
-        - name: db-data
-          mountPath: "/var/lib/mysql"
+        - name: mysql-persistent-storage
+          mountPath: /var/lib/mysql
+      volumes:
+      - name: mysql-persistent-storage
+        persistentVolumeClaim:
+          claimName: mysql-pvc

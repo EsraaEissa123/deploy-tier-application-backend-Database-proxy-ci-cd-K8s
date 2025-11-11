@@ -2,21 +2,22 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: proxy-deployment
-  namespace: webapp
   labels:
-    app: proxy-deployment
+    app: blog-proxy
 spec:
+  replicas: 1
   selector:
     matchLabels:
-      app: proxy
-  replicas: 2
+      app: blog-proxy
   template:
     metadata:
       labels:
-        app: proxy
+        app: blog-proxy
     spec:
       containers:
-      - name: proxy
-        image: 3booda24/nginx-proxy-go:latest
+      - name: nginx-proxy
+        # يجب استخدام صورتك التي تم بناؤها (مثال: myrepo/nginx-proxy:latest)
+        image: esraaeissa81/proxy:latest 
+        imagePullPolicy: Always
         ports:
         - containerPort: 443

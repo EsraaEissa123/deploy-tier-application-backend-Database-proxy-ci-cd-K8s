@@ -1,49 +1,54 @@
+version: '3.8'
 
 services:
-  proxy:
-    build: nginx/
-    image: nginx_proxy
-    ports:
-      - "443:443"
-    volumes:
-      - /etc/nginx/ssl/:/etc/nginx/ssl/
-    depends_on:
-      - backend
-    
-
-  backend:
-    build: .
-    image : backend
-    expose:
-      - "8000"
-    depends_on : 
-      - db
-    secrets:
-      - db-password
-
-
-
+  # 1. خدمة قاعدة البيانات (Database Service Name: db)
   db:
     image: mysql:8.0
+    container_name: mysql-db
+    restart: always
     environment:
-      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/db-password
-      MYSQL_DATABASE: example
+      # قراءة كلمة المرور من متغير البيئة المصدر
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: example # استخدمنا 'example' كما في main.go
     volumes:
-      - db_data:/var/lib/mysql
-
+      - db-data:/var/lib/mysql
+    
+  # 2. خدمة الواجهة الخلفية (Backend Service Name: backend)
+  backend:
+    build:
+      context: ./backend 
+    container_name: go-backend
+    restart: always
+    # تعتمد على 'db' - يجب أن يتطابق هذا الاسم مع اسم الخدمة أعلاه
+    depends_on:
+      - db
+    ports:
+      - "8000"
     secrets:
-      - db-password
+      # ربط كلمة المرور بالملف الذي يتوقعه تطبيق Go
+      - target: /run/secrets/db-password
+        source: db_password_file
       
-secrets:
-  db-password:
-    file: ./db-password.txt
-
+  # 3. خدمة البروكسي (Proxy Service Name: proxy)
+  proxy:
+    build:
+      context: ./nginx 
+    container_name: nginx-proxy
+    restart: always
+    # تعتمد على 'backend'
+    depends_on:
+      - backend
+    ports:
+      # كشف HTTPS خارجياً
+      - "443:443"
+    
+# تعريف الحجم المستمر
 volumes:
-  db_data:
+  db-data:
+    driver: local
 
-
-
-
-
-
-
+# تعريف ملف السر (Secret)
+secrets:
+  db_password_file:
+    # سيقرأ القيمة من الملف المحلي db-password.txt
+    file: ./db-password.txt

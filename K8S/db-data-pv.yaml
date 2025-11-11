@@ -1,14 +1,15 @@
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: db-pv
-  namespace: webapp
+  name: mysql-pv
+  labels:
+    type: local
 spec:
+  storageClassName: manual
   capacity:
-    storage: 5Gi
-  storageClassName: standard
+    storage: 1Gi
   accessModes:
-  - ReadWriteMany
-  persistentVolumeReclaimPolicy: Retain
+    - ReadWriteOnce
+  # مسار على جهاز الـ Node (Minikube VM)
   hostPath:
-    path: "/var/mysql"
+    path: "/mnt/data/mysql"

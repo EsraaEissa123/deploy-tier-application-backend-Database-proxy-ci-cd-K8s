@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: db-service          # تأكدي أن المسافات 2 فقط تحت metadata
+  namespace: dev
+  labels:
+    app: blog-db
+spec:
+  selector:
+    app: database           # هذا هو التعديل الحاسم: مطابق لاسم الـ label في الـ Pod
+  ports:
+    - protocol: TCP
+      port: 3306
+      targetPort: 3306
+  type: ClusterIP

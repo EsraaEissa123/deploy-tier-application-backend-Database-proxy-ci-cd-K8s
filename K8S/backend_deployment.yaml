@@ -2,45 +2,66 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: backend-deployment
-  namespace: webapp
   labels:
-    app: backend-deployment
+    app: blog-backend
 spec:
+  replicas: 1
   selector:
     matchLabels:
-      app: backend
-  replicas: 2
+      app: blog-backend
   template:
     metadata:
       labels:
-        app: backend
+        app: blog-backend
     spec:
-      volumes:
-      - name: db-password
-        secret:
-          secretName: db-secret
-      - name: pre-install
-        emptyDir: {}
+      # POD-LEVEL SECURITY CONTEXT: Includes fields like fsGroup that apply to volumes/pod
+      securityContext:
+        fsGroup: 1000 
+        
+      # *** NEW FIX: Stop mounting the service account token to avoid the read-only file system error ***
+      automountServiceAccountToken: false
+        
       initContainers:
-      - name: pre-install
-        image: busybox
-        command: ['sh', '-c', 'cat /db-secret/db-password >> /run/secrets/db-password']
-        volumeMounts:
-        - name: db-password
-          mountPath: "/db-secret"
-        - name: pre-install
-          mountPath: "/run/secrets"
+      - name: init-db-wait
+        image: busybox:1.36 
+        command: ['sh', '-c', '
+          echo "Waiting for db-service connectivity...";
+          until nc -z db-service 3306; do 
+            echo "Service db-service is unavailable - sleeping"; 
+            sleep 3; 
+          done; 
+          echo "db-service is ready!";
+        ']
+        
       containers:
-      - name: backend
-        image: 3booda24/app-go:latest
-        imagePullPolicy: Never
+      - name: go-app
+        image: esraaeissa81/backend:latest 
+        imagePullPolicy: Always
         ports:
         - containerPort: 8000
+        env:
+        - name: DB_HOST
+          value: db-service
+        - name: DB_USER
+          value: root
+        - name: DB_NAME
+          value: example
+        
         volumeMounts:
-        - name: pre-install
+        - name: db-secret-volume
           mountPath: "/run/secrets"
-        - name: db-password
-          mountPath: "/db-secret"
-
-
-
+          readOnly: true
+          
+        # CONTAINER-LEVEL SECURITY CONTEXT: Includes runAsUser, capabilities, etc.
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+          readOnlyRootFilesystem: false 
+          
+      volumes:
+      - name: db-secret-volume
+        secret:
+          secretName: mysql-secret
+          items:
+          - key: password
+            path: db-password

@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  # This is the name the Go app expects, based on the 'lookup db' log error.
+  name: db
+  labels:
+    app: mysql
+spec:
+  # We are setting the selector to match the label used by your MySQL deployment.
+  # Based on your existing db-service, this should be 'blog-db'.
+  selector:
+    app: blog-db 
+  ports:
+    - protocol: TCP
+      # This is the standard port for MySQL
+      port: 3306 
+      targetPort: 3306
+  # Use ClusterIP for internal service access
+  type: ClusterIP

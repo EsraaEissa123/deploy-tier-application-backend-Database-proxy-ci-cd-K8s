@@ -1,21 +1,14 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: proxy
-  namespace: webapp
+  name: proxy-nodeport
 spec:
   selector:
-    app: proxy
-  type: NodePort
-  sessionAffinity: None
-  sessionAffinityConfig:
-    clientIP:
-      timeoutSeconds: 10800
+    app: blog-proxy
   ports:
-  - name: https
-    protocol: TCP
-    port: 443
-    targetPort: 443
-    # If you set the `spec.type` field to `NodePort` and you want a specific port number,
-    # you can specify a value in the `spec.ports[*].nodePort` field.
-    nodePort: 30001
+    - protocol: TCP
+      port: 443 # المنفذ الذي يستمع عليه البروكسي داخلياً
+      targetPort: 443 
+      # اختياري: يمكنك تحديد NodePort معين (مثلاً 30080)، وإلا سيتم اختياره تلقائياً
+      nodePort: 30443 
+  type: NodePort

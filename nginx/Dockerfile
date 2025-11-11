@@ -1,14 +1,12 @@
 FROM nginx:alpine
 
-RUN apk add --no-cache openssl bash
+# إنشاء مجلد الشهادات
+RUN mkdir /etc/nginx/certs/
 
-COPY generate-ssl.sh /
+# نسخ ملف إعداد Nginx
+COPY nginx.conf /etc/nginx/nginx.conf
 
-RUN chmod +x generate-ssl.sh
-COPY ./nginx.conf /etc/nginx/nginx.conf
-
-CMD ["/bin/bash", "-c", "./generate-ssl.sh && nginx -g 'daemon off;'"]
-
-
-
-EXPOSE 443
+# نسخ الشهادة والمفتاح الذين تم توليدهما بواسطة generate-ssl.sh
+# ستحتاج إلى تشغيل generate-ssl.sh قبل بناء هذه الصورة
+COPY nginx-selfsigned.crt /etc/nginx/certs/
+COPY nginx-selfsigned.key /etc/nginx/certs/
