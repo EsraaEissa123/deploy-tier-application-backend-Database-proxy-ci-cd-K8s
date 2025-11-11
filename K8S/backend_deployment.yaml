@@ -39,7 +39,7 @@ spec:
 
       containers:
         - name: go-app
-          image: esraaeissa81/backend:LATEST_IMAGE_TAG
+          image: backend:LATEST_IMAGE_TAG
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
