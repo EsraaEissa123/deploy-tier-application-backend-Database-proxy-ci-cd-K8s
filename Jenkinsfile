@@ -1,8 +1,8 @@
 pipeline {
     agent {
         kubernetes {
-            label 'build-deploy-agent'   // نفس الاسم القديم عشان Pipelines الحالية
-            yaml '''
+            label 'build-deploy-agent'   // نفس الاسم القديم
+            yaml """
 apiVersion: v1
 kind: Pod
 metadata:
@@ -20,7 +20,10 @@ spec:
     securityContext:
       privileged: true
     tty: true
-'''
+  - name: jnlp
+    image: jenkins/inbound-agent:latest
+    args: ['$(JENKINS_SECRET)', '$(JENKINS_AGENT_NAME)']
+     """
         }
     }
 
@@ -35,8 +38,8 @@ spec:
         stage('Check Agent') {
             steps {
                 container('docker') {
-                    sh 'echo "Running on Pod: $NODE_NAME"'
                     sh 'docker version'
+                    sh 'echo "Running on Pod: $NODE_NAME"'
                 }
             }
         }
@@ -44,17 +47,13 @@ spec:
         stage('Checkout') {
             steps {
                 checkout scm
-                echo "Checked out ${env.GIT_COMMIT}"
             }
         }
 
         stage('Build Images') {
             steps {
                 container('docker') {
-                    echo 'Building backend image...'
                     sh "docker build -t ${DOCKER_REGISTRY}/backend:${IMAGE_TAG} -f backend/Dockerfile backend/"
-
-                    echo 'Building proxy image...'
                     sh "docker build -t ${DOCKER_REGISTRY}/proxy:${IMAGE_TAG} -f proxy/Dockerfile proxy/"
                 }
             }
@@ -64,7 +63,7 @@ spec:
             steps {
                 container('docker') {
                     withCredentials([usernamePassword(credentialsId: DOCKER_CREDENTIALS_ID, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        sh "echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin"
+                        sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
                         sh "docker push ${DOCKER_REGISTRY}/backend:${IMAGE_TAG}"
                         sh "docker push ${DOCKER_REGISTRY}/proxy:${IMAGE_TAG}"
                     }
