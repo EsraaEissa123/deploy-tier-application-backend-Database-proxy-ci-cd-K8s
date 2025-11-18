@@ -4,11 +4,14 @@ RUN apk add --no-cache git
 
 WORKDIR /app
 
-COPY backend/go.mod backend/go.sum ./
+# نسخ go.mod و go.sum مباشرة (بدون backend/)
+COPY go.mod go.sum ./
 RUN go mod download
 
+# نسخ كل الملفات
 COPY . .
 
+# Build
 RUN CGO_ENABLED=0 go build -o /blog-api .
 
 FROM alpine:latest
