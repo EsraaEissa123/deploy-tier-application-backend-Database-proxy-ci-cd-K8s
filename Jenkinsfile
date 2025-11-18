@@ -59,7 +59,7 @@ spec:
                         
                         // Build Proxy
                         sh """
-                            docker build -t ${REGISTRY}/proxy:${BUILD_NUMBER} -f proxy/Dockerfile proxy/
+                            docker build -t ${REGISTRY}/proxy:${BUILD_NUMBER} -f nginx/Dockerfile proxy/
                             docker tag ${REGISTRY}/proxy:${BUILD_NUMBER} ${REGISTRY}/proxy:latest
                         """
                     }
