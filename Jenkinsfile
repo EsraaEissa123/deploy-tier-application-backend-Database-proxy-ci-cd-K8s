@@ -1,4 +1,5 @@
 pipeline {
+    // 🚨 Agent Configuration: استخدام 'yaml' لتحديد حاويات الأدوات مباشرة
     agent {
         kubernetes {
             yaml '''
@@ -9,7 +10,16 @@ metadata:
     jenkins: agent
 spec:
   serviceAccountName: jenkins
+  # يجب أن تكون هناك حاوية jnlp واحدة على الأقل. سنضيفها لضمان الاتصال.
   containers:
+  # 1. حاوية JNLP (للاتصال بـ Master)
+  - name: jnlp
+    image: jenkins/inbound-agent:latest # 🚨 استخدمي صورة الـ Agent الصحيحة لـ Jenkins Master
+    securityContext:
+      runAsUser: 1000
+    # يجب ترك هذه الإعدادات فارغة ليستخدمها Jenkins لـ JNLP
+
+  # 2. حاوية Docker (للبناء)
   - name: docker
     image: docker:latest
     command:
@@ -18,20 +28,25 @@ spec:
     volumeMounts:
     - name: docker-sock
       mountPath: /var/run/docker.sock
+
+  # 3. حاوية Kubectl (للنشر)
   - name: kubectl
     image: bitnami/kubectl:latest
     command:
     - cat
     tty: true
+
   volumes:
   - name: docker-sock
     hostPath:
+      # 🚨 تأكدي أن هذا المسار صحيح على الـ Node
       path: /var/run/docker.sock
 '''
         }
     }
 
     environment {
+        // يتم استخدام credentials() لربط الـ Secret ID بالمتغير
         DOCKERHUB_CREDENTIALS = credentials('docker-hub-esraa')
         REGISTRY = 'esraaeissa81'
         NAMESPACE = 'dev'
@@ -51,14 +66,17 @@ spec:
                     script {
                         echo "🔨 Building Docker images with tag: ${BUILD_NUMBER}"
 
+                        // تصحيح مسار Dockerfile ومسار البناء (Build Context)
                         // Build Backend
                         sh """
+                            # Context هو مسار backend/ وملف Dockerfile هو backend/Dockerfile
                             docker build -t ${REGISTRY}/backend:${BUILD_NUMBER} -f backend/Dockerfile backend/
                             docker tag ${REGISTRY}/backend:${BUILD_NUMBER} ${REGISTRY}/backend:latest
                         """
 
                         // Build Proxy
                         sh """
+                          # Context هو مسار nginx/ وملف Dockerfile هو nginx/Dockerfile
                           docker build -t ${REGISTRY}/proxy:${BUILD_NUMBER} -f nginx/Dockerfile nginx/
                           docker tag ${REGISTRY}/proxy:${BUILD_NUMBER} ${REGISTRY}/proxy:latest
                           """
@@ -72,6 +90,7 @@ spec:
                 container('docker') {
                     script {
                         echo '📤 Pushing images to DockerHub...'
+                        // استخدام متغيرات الـ Secret المربوطة في environment
                         sh """
                             echo \${DOCKERHUB_CREDENTIALS_PSW} | docker login -u \${DOCKERHUB_CREDENTIALS_USR} --password-stdin
 
@@ -91,13 +110,26 @@ spec:
                 container('kubectl') {
                     script {
                         echo "🚀 Deploying to Kubernetes namespace: ${NAMESPACE}"
+
+                        // 1. التأكد من إنشاء Namespace قبل النشر
+                        sh "kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -"
+
+                        // 2. تطبيق جميع الـ Manifests (Deployments, Services, Secrets)
+                        echo "Applying/Ensuring K8s resources are present in ${NAMESPACE}..."
                         sh """
-                            # Update Backend
+                           # هذا ينشئ الـ Deployments والـ Services والـ Secrets لأول مرة، ويحدثها لاحقاً.
+                           kubectl apply -f k8s/ -n ${NAMESPACE}
+                        """
+
+                        // 3. تحديث الـ Deployment tag
+                        echo "Updating Deployments with new image tag: ${BUILD_NUMBER}"
+                        sh """
+                            # Update Backend Deployment (Deployment: backend-deployment, Container: go-app)
                             kubectl set image deployment/backend-deployment \
                                 go-app=${REGISTRY}/backend:${BUILD_NUMBER} \
                                 -n ${NAMESPACE}
 
-                            # Update Proxy
+                            # Update Proxy Deployment (Deployment: proxy-deployment, Container: nginx-proxy)
                             kubectl set image deployment/proxy-deployment \
                                 nginx-proxy=${REGISTRY}/proxy:${BUILD_NUMBER} \
                                 -n ${NAMESPACE}
@@ -117,17 +149,14 @@ spec:
                     script {
                         echo '🧪 Running smoke tests...'
                         sh """
-                            # Wait for pods to be ready
-                            sleep 10
-
-                            # Test Backend
-                            kubectl run smoke-test-\${BUILD_NUMBER} \
+                            # Test Backend via internal service: backend-service:8000
+                            kubectl run smoke-test-backend-\${BUILD_NUMBER} \
                                 --image=curlimages/curl \
                                 --rm -i --restart=Never \
                                 -n ${NAMESPACE} \
-                                -- curl -f http://backend-service:8000/ || exit 1
+                                -- curl -f http://backend-service:8000 || exit 1
 
-                            echo "✅ Smoke tests passed!"
+                            echo "✅ Backend Smoke Test Passed!"
                         """
                     }
                 }
@@ -138,14 +167,15 @@ spec:
     post {
         success {
             echo '✅ Pipeline completed successfully! 🎉'
-            echo "✅ Backend: ${REGISTRY}/backend:${BUILD_NUMBER}"
-            echo "✅ Proxy: ${REGISTRY}/proxy:${BUILD_NUMBER}"
+            echo "✅ Backend image: ${REGISTRY}/backend:${BUILD_NUMBER}"
+            echo "✅ Proxy image: ${REGISTRY}/proxy:${BUILD_NUMBER}"
         }
         failure {
             echo '❌ Pipeline failed! Check the logs above.'
         }
         always {
             container('docker') {
+                // محاولة تسجيل الخروج لتنظيف الجلسة
                 sh 'docker logout || true'
             }
         }
