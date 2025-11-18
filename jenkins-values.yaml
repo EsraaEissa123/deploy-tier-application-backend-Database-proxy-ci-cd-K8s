@@ -1,0 +1,36 @@
+controller:
+  # نوع الـ Service
+  serviceType: NodePort
+  nodePort: 32000
+  
+  # بيانات الدخول
+  admin:
+    username: admin
+    password: admin123
+  
+  # الـ Plugins اللي هتتثبت تلقائياً
+  installPlugins:
+    - kubernetes:4360.v8a_8a_1c5e_d47d
+    - workflow-aggregator:596.v8c21c963d92d
+    - git:5.6.0
+    - configuration-as-code:1900.vd365e2499670
+    - docker-workflow:580.vc0c340686b_54
+    
+  # السماح لـ Jenkins بإنشاء Pods
+  serviceAccount:
+    create: true
+    name: jenkins
+  
+  # Resources
+  resources:
+    requests:
+      cpu: "1000m"
+      memory: "2Gi"
+    limits:
+      cpu: "2000m"
+      memory: "4Gi"
+
+# تفعيل Agent Pods الديناميكية
+agent:
+  enabled: true
+  namespace: jenkins

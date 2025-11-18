@@ -20,7 +20,11 @@ func connect() (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return sql.Open("mysql", fmt.Sprintf("root:%s@tcp(db:3306)/example", string(bin)))
+	dbHost := os.Getenv("DB_HOST")
+	if dbHost == "" {
+		dbHost = "db-service"
+	}
+	return sql.Open("mysql", fmt.Sprintf("root:%s@tcp(%s:3306)/example", string(bin), dbHost))
 }
 
 func blogHandler(w http.ResponseWriter, r *http.Request) {

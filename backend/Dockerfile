@@ -7,7 +7,7 @@ WORKDIR /app
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download
 
-COPY backend/ .
+COPY . .
 
 RUN CGO_ENABLED=0 go build -o /blog-api .
 

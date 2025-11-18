@@ -1,112 +1,153 @@
 pipeline {
     agent {
         kubernetes {
-            label 'build-deploy-agent'
-            yaml '''
+            yaml """
 apiVersion: v1
 kind: Pod
 metadata:
   labels:
-    app: build-deploy-agent
+    jenkins: agent
 spec:
+  serviceAccountName: jenkins
   containers:
   - name: docker
-    image: docker:29.0.0-dind
+    image: docker:latest
     command:
-    - dockerd-entrypoint.sh
-    args:
-    - --host=tcp://0.0.0.0:2375
-    - --host=unix:///var/run/docker.sock
-    securityContext:
-      privileged: true
+    - cat
     tty: true
-  - name: jnlp
-    image: jenkins/inbound-agent:latest
-    args: ['\$JENKINS_SECRET', '\$JENKINS_AGENT_NAME']
-'''
+    volumeMounts:
+    - name: docker-sock
+      mountPath: /var/run/docker.sock
+  - name: kubectl
+    image: bitnami/kubectl:latest
+    command:
+    - cat
+    tty: true
+  volumes:
+  - name: docker-sock
+    hostPath:
+      path: /var/run/docker.sock
+"""
         }
     }
-
+    
     environment {
-        IMAGE_TAG = "${env.BUILD_NUMBER ?: 'local-'+env.BUILD_ID}"
-        DOCKER_REGISTRY = 'esraaeissa81'
-        K8S_NAMESPACE = 'dev'
-        DOCKER_CREDENTIALS_ID = 'docker-hub-esraa'
+        DOCKERHUB_CREDENTIALS = credentials('docker-hub-esraa')
+        REGISTRY = 'esraaeissa81'
+        NAMESPACE = 'dev'
     }
-
+    
     stages {
-        stage('Check Agent') {
+        stage('📥 Checkout') {
             steps {
-                container('docker-kubectl-tools') {
-                    sh 'docker version'
-                    sh "echo Running on Pod: ${NODE_NAME}"
-                }
-            }
-        }
-
-        stage('Checkout') {
-            steps {
+                echo '📥 Pulling code from GitHub...'
                 checkout scm
             }
         }
-
-        stage('Build Images') {
-            steps {
-                container('docker-kubectl-tools') {
-                    sh "docker build -t ${DOCKER_REGISTRY}/backend:${IMAGE_TAG} -f backend/Dockerfile backend/"
-                    sh "docker build -t ${DOCKER_REGISTRY}/proxy:${IMAGE_TAG} -f proxy/Dockerfile proxy/"
-                }
-            }
-        }
-
-        stage('Push Images') {
+        
+        stage('🔨 Build Images') {
             steps {
                 container('docker') {
-                    withCredentials([usernamePassword(credentialsId: DOCKER_CREDENTIALS_ID, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
-                        sh "docker push ${DOCKER_REGISTRY}/backend:${IMAGE_TAG}"
-                        sh "docker push ${DOCKER_REGISTRY}/proxy:${IMAGE_TAG}"
+                    script {
+                        echo "🔨 Building Docker images with tag: ${BUILD_NUMBER}"
+                        
+                        // Build Backend
+                        sh """
+                            docker build -t ${REGISTRY}/backend:${BUILD_NUMBER} -f backend/Dockerfile backend/
+                            docker tag ${REGISTRY}/backend:${BUILD_NUMBER} ${REGISTRY}/backend:latest
+                        """
+                        
+                        // Build Proxy
+                        sh """
+                            docker build -t ${REGISTRY}/proxy:${BUILD_NUMBER} -f proxy/Dockerfile proxy/
+                            docker tag ${REGISTRY}/proxy:${BUILD_NUMBER} ${REGISTRY}/proxy:latest
+                        """
                     }
                 }
             }
         }
-
-        stage('Prepare Manifests') {
+        
+        stage('📤 Push to DockerHub') {
             steps {
-                sh '''
-mkdir -p k8s-generated
-for f in k8s/*.yaml; do
-  sed "s|LATEST_IMAGE_TAG|'"${IMAGE_TAG}"'|g" "$f" > "k8s-generated/$(basename $f)"
-done
-ls -la k8s-generated
-'''
+                container('docker') {
+                    script {
+                        echo '📤 Pushing images to DockerHub...'
+                        sh """
+                            echo \${DOCKERHUB_CREDENTIALS_PSW} | docker login -u \${DOCKERHUB_CREDENTIALS_USR} --password-stdin
+                            
+                            docker push ${REGISTRY}/backend:${BUILD_NUMBER}
+                            docker push ${REGISTRY}/backend:latest
+                            
+                            docker push ${REGISTRY}/proxy:${BUILD_NUMBER}
+                            docker push ${REGISTRY}/proxy:latest
+                        """
+                    }
+                }
             }
         }
-
-        stage('Deploy to K8s') {
+        
+        stage('🚀 Deploy to Kubernetes') {
             steps {
-                sh "kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -"
-                sh "kubectl apply -f k8s-generated/ -n ${K8S_NAMESPACE}"
-                sh "kubectl rollout status deployment/backend-deployment -n ${K8S_NAMESPACE} --timeout=120s || true"
-                sh "kubectl rollout status deployment/proxy-deployment -n ${K8S_NAMESPACE} --timeout=120s || true"
+                container('kubectl') {
+                    script {
+                        echo "🚀 Deploying to Kubernetes namespace: ${NAMESPACE}"
+                        sh """
+                            # Update Backend
+                            kubectl set image deployment/backend-deployment \
+                                go-app=${REGISTRY}/backend:${BUILD_NUMBER} \
+                                -n ${NAMESPACE}
+                            
+                            # Update Proxy
+                            kubectl set image deployment/proxy-deployment \
+                                nginx-proxy=${REGISTRY}/proxy:${BUILD_NUMBER} \
+                                -n ${NAMESPACE}
+                            
+                            # Wait for rollout
+                            kubectl rollout status deployment/backend-deployment -n ${NAMESPACE} --timeout=300s
+                            kubectl rollout status deployment/proxy-deployment -n ${NAMESPACE} --timeout=300s
+                        """
+                    }
+                }
             }
         }
-
-        stage('Smoke Test') {
+        
+        stage('🧪 Smoke Test') {
             steps {
-                sh "kubectl -n ${K8S_NAMESPACE} get svc -o wide"
-                sh "kubectl port-forward svc/proxy-service 8080:80 -n ${K8S_NAMESPACE} & sleep 3; curl --fail http://127.0.0.1:8080/health || (echo 'SMOKE TEST FAILED' ; exit 1)"
-                sh "pkill -f 'kubectl port-forward' || true"
+                container('kubectl') {
+                    script {
+                        echo '🧪 Running smoke tests...'
+                        sh """
+                            # Wait for pods to be ready
+                            sleep 10
+                            
+                            # Test Backend
+                            kubectl run smoke-test-\${BUILD_NUMBER} \
+                                --image=curlimages/curl \
+                                --rm -i --restart=Never \
+                                -n ${NAMESPACE} \
+                                -- curl -f http://backend-service:8000/ || exit 1
+                            
+                            echo "✅ Smoke tests passed!"
+                        """
+                    }
+                }
             }
         }
     }
-
+    
     post {
         success {
-            echo "Pipeline succeeded. Deployed ${DOCKER_REGISTRY} images with tag ${IMAGE_TAG} to ${K8S_NAMESPACE}."
+            echo '✅ Pipeline completed successfully! 🎉'
+            echo "✅ Backend: ${REGISTRY}/backend:${BUILD_NUMBER}"
+            echo "✅ Proxy: ${REGISTRY}/proxy:${BUILD_NUMBER}"
         }
         failure {
-            echo 'Pipeline failed.'
+            echo '❌ Pipeline failed! Check the logs above.'
+        }
+        always {
+            container('docker') {
+                sh 'docker logout || true'
+            }
         }
     }
 }
