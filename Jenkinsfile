@@ -108,37 +108,19 @@ spec:
         stage('🚀 Deploy to Kubernetes') {
             steps {
                 container('kubectl') {
-                    script {
-                        echo "🚀 Deploying to Kubernetes namespace: ${NAMESPACE}"
+                    sh """
+                        echo '🚀 Updating Backend deployment...'
+                        kubectl set image deployment/backend-deployment go-app=${REGISTRY}/backend:${BUILD_NUMBER} -n ${NAMESPACE}
 
-                        // 1. التأكد من إنشاء Namespace قبل النشر
-                        sh "kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -"
+                        echo '🚀 Updating Proxy deployment...'
+                        kubectl set image deployment/proxy-deployment nginx-proxy=${REGISTRY}/proxy:${BUILD_NUMBER} -n ${NAMESPACE}
 
-                        // 2. تطبيق جميع الـ Manifests (Deployments, Services, Secrets)
-                        echo "Applying/Ensuring K8s resources are present in ${NAMESPACE}..."
-                        sh """
-                           # هذا ينشئ الـ Deployments والـ Services والـ Secrets لأول مرة، ويحدثها لاحقاً.
-                           kubectl apply -f k8s/ -n ${NAMESPACE}
-                        """
+                        echo '⏳ Waiting for rollout...'
+                        kubectl rollout status deployment/backend-deployment -n ${NAMESPACE} --timeout=180s
+                        kubectl rollout status deployment/proxy-deployment -n ${NAMESPACE} --timeout=180s
 
-                        // 3. تحديث الـ Deployment tag
-                        echo "Updating Deployments with new image tag: ${BUILD_NUMBER}"
-                        sh """
-                            # Update Backend Deployment (Deployment: backend-deployment, Container: go-app)
-                            kubectl set image deployment/backend-deployment \
-                                go-app=${REGISTRY}/backend:${BUILD_NUMBER} \
-                                -n ${NAMESPACE}
-
-                            # Update Proxy Deployment (Deployment: proxy-deployment, Container: nginx-proxy)
-                            kubectl set image deployment/proxy-deployment \
-                                nginx-proxy=${REGISTRY}/proxy:${BUILD_NUMBER} \
-                                -n ${NAMESPACE}
-
-                            # Wait for rollout
-                            kubectl rollout status deployment/backend-deployment -n ${NAMESPACE} --timeout=300s
-                            kubectl rollout status deployment/proxy-deployment -n ${NAMESPACE} --timeout=300s
-                        """
-                    }
+                        echo '✅ Deployment completed!'
+                    """
                 }
             }
         }
